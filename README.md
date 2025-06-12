@@ -9,9 +9,6 @@ Librerías comunes utilizadas:
 
 Instala los requerimientos con:
 
-bash
-Copiar
-Editar
 pip install -r requirements.txt
 (Si tu repositorio no tiene un requirements.txt aún, lo puedes generar con pip freeze > requirements.txt.)
 
