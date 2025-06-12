@@ -17,16 +17,9 @@ pip install -r requirements.txt
 
 🚀 ¿Cómo usar los scripts?
 Clona el repositorio:
-
-bash
-Copiar
-Editar
 git clone https://github.com/tu-usuario/tu-repositorio.git
 Ve a la carpeta correspondiente y ejecuta el script:
 
-bash
-Copiar
-Editar
 cd scripts/automatizacion
 python script_ejemplo.py
 📌 Notas
@@ -36,6 +29,6 @@ Algunos pueden requerir configuración previa (por ejemplo, rutas de archivos o 
 
 🧑‍💻 Autor
 Desarrollado por Derehckz, Analista de Sistemas.
-Contacto: [alanchocanos@gmial.com]
+Contacto: [alanchocanos@gmail.com]
 
 “Lo simple y funcional es mejor que lo complejo e ineficiente.”
