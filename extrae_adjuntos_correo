@@ -1,0 +1,38 @@
+import os
+from imapclient import IMAPClient
+import pyzmail
+import getpass
+from pathlib import Path
+
+# === CONFIGURACIÓN ===
+IMAP_SERVER = 'imap-mail.outlook.com'  # Cambia esto si usas Gmail
+EMAIL_ACCOUNT = 'xxxxxxxxxxxxx'
+PALABRA_CLAVE = 'RES'  # Puedes cambiar esto por cualquier palabra
+CARPETA_DESTINO = r'C:\xxxx\xxxx\xxxxx\adjuntos_descargados'
+os.makedirs(CARPETA_DESTINO, exist_ok=True)
+
+# === AUTENTICACIÓN ===
+password = getpass.getpass('Contraseña de tu correo: ')
+
+# === CREAR CARPETA SI NO EXISTE ===
+os.makedirs(CARPETA_DESTINO, exist_ok=True)
+
+with IMAPClient(IMAP_SERVER) as client:
+    client.login(EMAIL_ACCOUNT, password)
+    client.select_folder('INBOX', readonly=True)
+
+    # Buscar correos que tengan adjuntos
+    mensajes = client.search(['ALL'])
+
+    for uid in mensajes[::-1]:  # Desde el más reciente
+        raw_message = client.fetch([uid], ['BODY[]', 'FLAGS'])
+        message = pyzmail.PyzMessage.factory(raw_message[uid][b'BODY[]'])
+
+        if message.mailparts:
+            for part in message.mailparts:
+                if part.filename:
+                    if PALABRA_CLAVE.lower() in part.filename.lower():
+                        ruta = os.path.join(CARPETA_DESTINO, part.filename)
+                        with open(ruta, 'wb') as f:
+                            f.write(part.get_payload())
+                        print(f"✅ Guardado: {part.filename}")
