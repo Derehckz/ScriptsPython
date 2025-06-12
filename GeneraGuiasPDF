@@ -7,72 +7,42 @@ from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.utils import ImageReader
 from reportlab.lib.units import inch
 import re
+from datetime import datetime
+import calendar
+
 
 # ---- Parámetros de usuario ----
 EXCEL_PATH = r"C:\Users\alanc\Desktop\Guias de actividad\nrc.xlsx"
 LOGO_PATH = r"C:\Users\alanc\Desktop\Guias de actividad\logo.png"
 OUTPUT_ROOT = r"C:\Users\alanc\Desktop\Guias de actividad"
-MES = "Abril"
-FECHA_EMISION = "31 de Mayo 2025"
-TITULO = "INFORME DE ACTIVIDADES MENSUAL DOCENTE FDI CST2488"
-TITULO_CARGA = "Carga Académica del Periodo"
+MESES = ["Abril", "Mayo"]  # 👈 Aquí puedes agregar todos los meses que necesites
 
-# ---- Función para fondo de logo ----
-def add_background(canvas, doc):
-    logo = ImageReader(LOGO_PATH)
-    canvas.saveState()
-    canvas.drawImage(logo, x=40, y=735, width=40, height=40, mask='auto')
-    canvas.restoreState()
+def obtener_ultimo_dia_mes(mes_nombre, año):
+    meses_dict = {
+        "Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4,
+        "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8,
+        "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12
+    }
+    mes_num = meses_dict[mes_nombre]
+    ultimo_dia = calendar.monthrange(año, mes_num)[1]
+    return ultimo_dia
+
 
 # ---- Estilos ----
 styles = getSampleStyleSheet()
 
-style_title = ParagraphStyle(
-    "Title",
-    parent=styles["Title"],
-    alignment=TA_CENTER,
-    fontSize=14,
-    leading=18,
-    fontName="Helvetica-Bold"
-)
+style_title = ParagraphStyle("Title", parent=styles["Title"], alignment=TA_CENTER, fontSize=14, leading=18, fontName="Helvetica-Bold")
+style_title_bold = ParagraphStyle("TitleBold", parent=styles["Title"], alignment=TA_CENTER, fontSize=14, leading=18, fontName="Helvetica-Bold")
+style_center = ParagraphStyle("Center", parent=styles["Normal"], alignment=TA_CENTER, fontSize=12, leading=16, fontName="Helvetica")
+style_center_big = ParagraphStyle("CenterBig", parent=styles["Normal"], alignment=TA_CENTER, fontSize=12, leading=17, fontName="Helvetica")
+style_norm = ParagraphStyle("Normal", parent=styles["Normal"], fontName="Helvetica", fontSize=10, leading=14, alignment=TA_JUSTIFY)
 
-style_title_bold = ParagraphStyle(
-    "TitleBold",
-    parent=styles["Title"],
-    alignment=TA_CENTER,
-    fontSize=14,
-    leading=18,
-    fontName="Helvetica-Bold"
-)
+def add_background(canvas, doc):
+    logo = ImageReader(LOGO_PATH)
+    canvas.saveState()
+    canvas.drawImage(logo, x=40, y=715, width=60, height=60, mask='auto')
+    canvas.restoreState()
 
-style_center = ParagraphStyle(
-    "Center",
-    parent=styles["Normal"],
-    alignment=TA_CENTER,
-    fontSize=12,
-    leading=16,
-    fontName="Helvetica"
-)
-
-style_center_big = ParagraphStyle(
-    "CenterBig",
-    parent=styles["Normal"],
-    alignment=TA_CENTER,
-    fontSize=12,
-    leading=17,
-    fontName="Helvetica"
-)
-
-style_norm = ParagraphStyle(
-    "Normal",
-    parent=styles["Normal"],
-    fontName="Helvetica",
-    fontSize=10,
-    leading=14,
-    alignment=TA_JUSTIFY
-)
-
-# Carga de datos con manejo de error
 try:
     df = pd.read_excel(EXCEL_PATH, engine="openpyxl")
     df = df.dropna(subset=["Identificador del profesor", "Profesor"])
@@ -80,127 +50,141 @@ except Exception as e:
     print(f"❌ Error leyendo el archivo Excel: {e}")
     exit(1)
 
-pdf_count = 0
+year_now = datetime.now().year
+pdf_total = 0
 carpetas_creadas = set()
 
-# Para control de sobrescritura
-existing_files = []
-for (rut, raw_campus), grupo in df.groupby(["Identificador del profesor", "Descripción Campus"]):
-    campus_desc = re.sub(r"\b(IPST|CFTST)\b", "", raw_campus, flags=re.IGNORECASE).strip()
-    partes = grupo["Profesor"].iloc[0].split(";")
-    nombre_base = partes[0].strip()
-    apellido = partes[1].strip() if len(partes) > 1 else ""
-    nombre_full = f"{nombre_base} {apellido}"
-    institucion = grupo["Institución"].iloc[0].strip()
-    carpeta_salida = os.path.join(OUTPUT_ROOT, campus_desc, institucion)
-    safe_name = "".join(c for c in nombre_full if c.isalnum() or c in (" ", "_")).rstrip()
-    output_pdf = os.path.join(carpeta_salida, f"{rut}-{safe_name}.pdf")
-    if os.path.exists(output_pdf):
-        existing_files.append(output_pdf)
+for MES in MESES:
+    ultimo_dia = obtener_ultimo_dia_mes(MES, year_now)
+    FECHA_EMISION = f"{ultimo_dia} de {MES} {year_now}"
 
-overwrite_all = None
+    existing_files = []
 
-if existing_files:
-    print(f"⚠️ Se encontraron {len(existing_files)} archivos PDF existentes que podrían ser sobrescritos.")
-    while True:
-        decision = input("¿Deseas sobrescribir todos los archivos existentes? (s=Sí / n=No): ").strip().lower()
-        if decision in ("s", "n"):
-            overwrite_all = (decision == "s")
-            break
+    for (rut, raw_campus), grupo in df.groupby(["Identificador del profesor", "Descripción Campus"]):
+        campus_upper = raw_campus.upper()
+        if re.search(r"\bIP\b", campus_upper) or re.search(r"IPST", campus_upper):
+            sufijo = "IST2488"
+        elif re.search(r"\bCFT\b", campus_upper) or re.search(r"CFTST", campus_upper):
+            sufijo = "CST2488"
         else:
-            print("Por favor, responde con 's' o 'n'.")
+            sufijo = "2488"
 
-for (rut, raw_campus), grupo in df.groupby(["Identificador del profesor", "Descripción Campus"]):
-    campus_desc = re.sub(r"\b(IPST|CFTST)\b", "", raw_campus, flags=re.IGNORECASE).strip()
-    partes = grupo["Profesor"].iloc[0].split(";")
-    nombre_base = partes[0].strip()
-    apellido = partes[1].strip() if len(partes) > 1 else ""
-    nombre_full = f"{nombre_base} {apellido}"
-    institucion = grupo["Institución"].iloc[0].strip()
-    carpeta_salida = os.path.join(OUTPUT_ROOT, campus_desc, institucion)
-    os.makedirs(carpeta_salida, exist_ok=True)
-    safe_name = "".join(c for c in nombre_full if c.isalnum() or c in (" ", "_")).rstrip()
-    output_pdf = os.path.join(carpeta_salida, f"{rut}-{safe_name}.pdf")
+        partes = grupo["Profesor"].iloc[0].split(";")
+        nombre_base = partes[0].strip()
+        apellido = partes[1].strip() if len(partes) > 1 else ""
+        nombre_full = f"{nombre_base} {apellido}"
+        institucion = grupo["Institución"].iloc[0].strip()
+        campus_desc = re.sub(r"\b(IPST|CFTST)\b", "", raw_campus, flags=re.IGNORECASE).strip()
+        carpeta_salida = os.path.join(OUTPUT_ROOT, MES, campus_desc, institucion)  # 📁 Añadimos MES a la ruta
+        os.makedirs(carpeta_salida, exist_ok=True)
+        safe_name = "".join(c for c in nombre_full if c.isalnum() or c in (" ", "_")).rstrip()
+        output_pdf = os.path.join(carpeta_salida, f"{rut}-{safe_name}.pdf")
 
-    # Validar si archivo existe y no quiere sobrescribir
-    if os.path.exists(output_pdf):
-        if overwrite_all is False:
+        if os.path.exists(output_pdf):
+            existing_files.append(output_pdf)
+
+    overwrite_all = None
+    if existing_files:
+        print(f"\n⚠️ Para el mes de {MES}: Se encontraron {len(existing_files)} archivos PDF existentes.")
+        while True:
+            decision = input(f"¿Deseas sobrescribir los archivos existentes para {MES}? (s=Sí / n=No): ").strip().lower()
+            if decision in ("s", "n"):
+                overwrite_all = (decision == "s")
+                break
+            else:
+                print("Por favor, responde con 's' o 'n'.")
+
+    for (rut, raw_campus), grupo in df.groupby(["Identificador del profesor", "Descripción Campus"]):
+        campus_upper = raw_campus.upper()
+        if re.search(r"\bIP\b", campus_upper) or re.search(r"IPST", campus_upper):
+            sufijo = "IST2488"
+        elif re.search(r"\bCFT\b", campus_upper) or re.search(r"CFTST", campus_upper):
+            sufijo = "CST2488"
+        else:
+            sufijo = "2488"
+
+        TITULO = f"INFORME DE ACTIVIDADES MENSUAL DOCENTE FDI {sufijo}"
+        descripcion_convenio = f"Descripción de las principales actividades realizadas según convenio FDI {sufijo}:"
+        titulo_desc_convenio = f"Servicios académicos y docentes convenio los lagos FDI {sufijo}:"
+
+        partes = grupo["Profesor"].iloc[0].split(";")
+        nombre_base = partes[0].strip()
+        apellido = partes[1].strip() if len(partes) > 1 else ""
+        nombre_full = f"{nombre_base} {apellido}"
+        institucion = grupo["Institución"].iloc[0].strip()
+        campus_desc = re.sub(r"\b(IPST|CFTST)\b", "", raw_campus, flags=re.IGNORECASE).strip()
+        carpeta_salida = os.path.join(OUTPUT_ROOT, MES, campus_desc, institucion)
+        os.makedirs(carpeta_salida, exist_ok=True)
+        safe_name = "".join(c for c in nombre_full if c.isalnum() or c in (" ", "_")).rstrip()
+        output_pdf = os.path.join(carpeta_salida, f"{rut}-{safe_name}.pdf")
+
+        if os.path.exists(output_pdf) and overwrite_all is False:
             print(f"⏭️ Omitido (archivo ya existe): {output_pdf}")
             continue
 
-    try:
-        doc = SimpleDocTemplate(
-            output_pdf,
-            pagesize=letter,
-            rightMargin=40,
-            leftMargin=40,
-            topMargin=70,
-            bottomMargin=40
-        )
+        try:
+            doc = SimpleDocTemplate(output_pdf, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=70, bottomMargin=40)
+            story = []
 
-        story = []
+            story.append(Paragraph(TITULO, style_title))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph(f"<b>Nombre del docente:</b> {rut} - {nombre_full}", style_center))
+            story.append(Paragraph(f"<b>Mes:</b> {MES}    <b>Sede:</b> {campus_desc}    <b>Fecha de emisión:</b> {FECHA_EMISION}", style_center_big))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph('<hr width="100%" color="grey" />', style_norm))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph("<b>Motivo principal de las actividades desarrolladas:</b>", style_center))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(f"<b>{titulo_desc_convenio}</b>", style_center))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph(f"<b>{descripcion_convenio}</b>", style_center))
+            story.append(Spacer(1, 6))
+            actividades = (
+                "• Dictación de clases y todas las actividades inherentes a estas, participación en reuniones de planeamiento y evaluación del proceso.<br />"
+                "• Elaboración de registros académicos, elaboración y corrección de pruebas y elaboración de ayudas didácticas.<br />"
+                "• Coordinación de áreas temáticas de la disciplina o del plan de estudios.<br />"
+                "• Elaboración y preparación de instrumentos de evaluación, elaboración y edición de material de apoyo a la docencia.<br />"
+                "• Otras que le sean encomendadas por el establecimiento educacional conforme con los Planes y cursos aprobados y a la Reglamentación Interna y Académica vigente."
+            )
+            story.append(Paragraph(actividades, style_norm))
+            story.append(Spacer(1, 20))
+            story.append(Paragraph("Carga Académica del Periodo", style_title_bold))
+            story.append(Spacer(1, 12))
+            tabla_data = [["NRC", "NOMBRE ASIGNATURA"]]
+            for _, row in grupo.iterrows():
+                tabla_data.append([str(row["NRC"]), row["NOMBRE ASIGNATURA"]])
+            table = Table(tabla_data, colWidths=[80, 350])
+            table.setStyle([
+                ("GRID", (0, 0), (-1, -1), 0.5, "black"),
+                ("BACKGROUND", (0, 0), (-1, 0), "#f0f0f0"),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+            ])
+            story.append(table)
+            story.append(Spacer(1, 40))
 
-        story.append(Paragraph(TITULO, style_title))
-        story.append(Spacer(1, 12))
-        story.append(Paragraph(f"<b>Nombre del docente:</b> {rut} - {nombre_full}", style_center))
-        story.append(Paragraph(
-            f"<b>Mes:</b> {MES}    <b>Sede:</b> {campus_desc}    <b>Fecha de emisión:</b> {FECHA_EMISION}",
-            style_center_big
-        ))
-        story.append(Spacer(1, 12))
-        story.append(Paragraph('<hr width="100%" color="grey" />', style_norm))
-        story.append(Spacer(1, 12))
-        story.append(Paragraph("<b>Motivo principal de las actividades desarrolladas:</b>", style_center))
-        story.append(Spacer(1, 6))
-        story.append(Paragraph("Servicios académicos y docentes convenio los lagos FDI CST2488", style_center))
-        story.append(Spacer(1, 12))
-        story.append(Paragraph("<b>Descripción de las principales actividades realizadas según convenio FDI CST2488:</b>", style_center))
-        story.append(Spacer(1, 6))
-        actividades = (
-            "• Dictación de clases y todas las actividades inherentes a estas, participación en reuniones de planeamiento y evaluación del proceso.<br />"
-            "• Elaboración de registros académicos, elaboración y corrección de pruebas y elaboración de ayudas didácticas.<br />"
-            "• Coordinación de áreas temáticas de la disciplina o del plan de estudios.<br />"
-            "• Elaboración y preparación de instrumentos de evaluación, elaboración y edición de material de apoyo a la docencia.<br />"
-            "• Otras que le sean encomendadas por el establecimiento educacional conforme con los Planes y cursos aprobados y a la Reglamentación Interna y Académica vigente."
-        )
-        story.append(Paragraph(actividades, style_norm))
-        story.append(Spacer(1, 20))
-        story.append(Paragraph(TITULO_CARGA, style_title_bold))
-        story.append(Spacer(1, 12))
-        tabla_data = [["NRC", "NOMBRE ASIGNATURA"]]
-        for _, row in grupo.iterrows():
-            tabla_data.append([str(row["NRC"]), row["NOMBRE ASIGNATURA"]])
-        table = Table(tabla_data, colWidths=[80, 350])
-        table.setStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, "black"),
-            ("BACKGROUND", (0, 0), (-1, 0), "#f0f0f0"),
-            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-        ])
-        story.append(table)
-        story.append(Spacer(1, 40))  # Espacio antes de la sección de firmas
+            firma_docente = f"{rut} - {nombre_full}"
+            firma_data = [
+                ["__________________________", "__________________________"],
+                [firma_docente, "Coordinador general docente"]
+            ]
+            firma_table = Table(firma_data, colWidths=[260, 260])
+            firma_table.setStyle([
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (0, 0), 6),
+                ("TOPPADDING", (1, 1), (1, 1), 4),
+            ])
+            story.append(KeepTogether([firma_table]))
 
-        firma_docente = f"{rut} - {nombre_full}"
-        firma_data = [
-            ["__________________________", "__________________________"],
-            [firma_docente, "Coordinador general docente"]
-        ]
-        firma_table = Table(firma_data, colWidths=[260, 260])
-        firma_table.setStyle([
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-            ("TOPPADDING", (1, 1), (1, 1), 4),
-        ])
-        story.append(KeepTogether([firma_table]))
+            doc.build(story, onFirstPage=add_background, onLaterPages=add_background)
+            print(f"✅ Informe generado: {output_pdf}")
+            pdf_total += 1
+            carpetas_creadas.add(carpeta_salida)
 
-        doc.build(story, onFirstPage=add_background, onLaterPages=add_background)
-        print(f"✅ Informe generado: {output_pdf}")
-        pdf_count += 1
-        carpetas_creadas.add(carpeta_salida)
+        except Exception as e:
+            print(f"❌ Error generando el PDF para {rut} - {nombre_full}: {e}")
 
-    except Exception as e:
-        print(f"❌ Error generando el PDF para {rut} - {nombre_full}: {e}")
-
-print("\n¡Proceso completado con éxito!")
-print(f"Total de informes generados: {pdf_count}")
+print("\n🎉 ¡Proceso completado con éxito!")
+print(f"Total de informes generados: {pdf_total}")
 print(f"Total de carpetas creadas: {len(carpetas_creadas)}")
+
