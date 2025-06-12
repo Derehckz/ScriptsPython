@@ -22,6 +22,7 @@ Ve a la carpeta correspondiente y ejecuta el script:
 
 cd scripts/automatizacion
 python script_ejemplo.py
+
 📌 Notas
 Los scripts están comentados y diseñados para ser fáciles de entender y modificar.
 
